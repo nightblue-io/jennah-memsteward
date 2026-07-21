@@ -4,10 +4,8 @@ A small demo **agent** that consumes Jennah's public memory APIs the way any
 external agent would: plain HTTP/JSON through the `jennah-proxy` gateway,
 authenticated with a `jennah_sk_` API key. No Jennah server internals are
 imported - this is a standalone Go module, so it doubles as a reference for
-outside integrators. It's a sibling to
-[`jennah-memchat`](../jennah-memchat).
+outside integrators.
 
-Where **memchat** is *reactive* (a human speaks, it recalls and replies),
 **memsteward** runs *unattended* over a source tree and stresses the parts of
 Jennah a long-running agent leans on: the **execution log as durable state**,
 the **graph as structural knowledge**, and **incremental work driven by what it

@@ -1,13 +1,12 @@
 // Command memsteward is a demo agent: an AUTONOMOUS codebase STEWARD that keeps a
 // living knowledge graph of a source tree in Jennah, consuming the public memory
 // APIs exactly the way any external agent would — plain HTTP/JSON through the
-// jennah-proxy gateway, authenticated with a jennah_sk_ API key. Like the memchat
-// demo it is a standalone Go module (its own go.mod, not part of the server build)
-// so it models a real outside consumer.
+// jennah-proxy gateway, authenticated with a jennah_sk_ API key. It is a
+// standalone Go module (its own go.mod, not part of the server build) so it
+// models a real outside consumer.
 //
-// Where memchat is reactive (a human speaks, it recalls and replies), memsteward
-// runs UNATTENDED over a repo and exercises the parts of Jennah a long-running
-// agent leans on:
+// memsteward runs UNATTENDED over a repo and exercises the parts of Jennah a
+// long-running agent leans on:
 //
 //   - The EXECUTION LOG as durable per-file state. Each analyzed file writes a log
 //     step carrying its content hash. On the next run the steward reads the log
