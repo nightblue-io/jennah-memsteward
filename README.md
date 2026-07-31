@@ -55,6 +55,10 @@ Cross-run memory is just **reusing the same `agent_instance_id`**, persisted to
 re-running converges instead of fragmenting. Delete the state file to steward a
 fresh workspace.
 
+New workspaces are created as `demo.memsteward_<random>`. `.` is the agent-selector
+separator, and selector matching is segment-anchored, so a role carrying the single
+selector `demo.*` reaches every workspace this demo mints - and nothing else.
+
 ## Prerequisites
 
 1. A Jennah API key for an **approved, entitled** enterprise. Mint one after
