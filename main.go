@@ -324,7 +324,7 @@ func commitFile(ctx context.Context, jc *jennahClient, agentID string, f fileEnt
 		return fmt.Errorf("commit %s: %w", f.rel, err)
 	}
 	fmt.Printf("  · %-8s %s  (%d symbols, %d imports, %d decisions)\n", why, f.rel, len(fa.Symbols), len(fa.Imports), len(fa.Decisions))
-	printReceipt(resp)
+	printReceipt(resp, f.rel)
 	return nil
 }
 
@@ -550,13 +550,41 @@ func commit(ctx context.Context, jc *jennahClient, agentID string, req *agentpb.
 	return &resp, err
 }
 
-func printReceipt(r *agentpb.CommitMemoryResponse) {
+// printReceipt logs the commit counts and acts on the receipt's truncation report.
+// rel is the repo-relative path of the file this commit summarized, used to name
+// the offender (chunk ids here are random and identify nothing on their own).
+func printReceipt(r *agentpb.CommitMemoryResponse, rel string) {
 	ts := "?"
 	if t := r.GetCommitTimestamp(); t != nil {
 		ts = t.AsTime().UTC().Format(time.RFC3339)
 	}
 	vlog("committed: log=%d vec=%d nodes=%d edges=%d @ %s",
 		r.GetExecutionLogRows(), r.GetVectorRows(), r.GetGraphNodeRows(), r.GetGraphEdgeRows(), ts)
+
+	// The commit SUCCEEDED, but the embedding model truncated content past its
+	// input limit (~2048 tokens): the file's summary is stored in full while its
+	// vector covers only the beginning.
+	//
+	// Worth being precise about the blast radius here: memsteward itself never runs
+	// a semantic query — it reads the execution log for per-file state and the graph
+	// for structure — so truncation does NOT degrade anything this tool does. What
+	// it degrades is the searchable map memsteward exists to BUILD, for whoever
+	// queries it later (a person, or another agent). That is still worth reporting,
+	// but it is a quality problem in the output rather than a malfunction in the run.
+	//
+	// Printed unconditionally, NOT under vlog, for the same reason as the sibling
+	// demos: a silently partial index is not something a caller should have to opt in
+	// to hearing about.
+	//
+	// reject_on_truncation is deliberately NOT set: aborting would lose the file's
+	// graph nodes and its per-file state marker too, which would make the next run
+	// re-analyze it and hit the same wall. Splitting a long file's summary into
+	// several chunks is the real fix.
+	if ids := r.GetTruncatedChunkIds(); len(ids) > 0 {
+		fmt.Fprintf(os.Stderr, "[memory warning] summary of %s too long to embed in full, "+
+			"semantic search over this file will only see its beginning (chunk %s)\n",
+			rel, strings.Join(ids, ", "))
+	}
 }
 
 // ---- HTTP client (protojson over the gateway, Bearer auth) ----
