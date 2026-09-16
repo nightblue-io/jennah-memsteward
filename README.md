@@ -134,7 +134,7 @@ the graph it built.
 ## Notes
 
 - Each provider defaults to a snappy/cheap model (`claude-sonnet-5`,
-  `gemini-2.5-flash`); edit `anthropicModel` in `brain_anthropic.go`
+  `gemini-3.8-flash`); edit `anthropicModel` in `brain_anthropic.go`
   (→ `anthropic.ModelClaudeOpus4_8`) or `geminiModel` in `brain_gemini.go`
   (→ `gemini-2.5-pro`) for max capability. Backends live behind the `brain`
   interface in `brain.go`.
