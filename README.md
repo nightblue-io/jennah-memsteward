@@ -111,7 +111,7 @@ go run . -jennah-api-key jennah_sk_... -anthropic-api-key sk-ant-... -repo .
 ```
 
 On start it prints the chosen brain, e.g.
-`analysis model: anthropic/claude-sonnet-5`.
+`analysis model: anthropic/claude-sonnet-5-5`.
 
 Try: point it at a small repo, let it finish, then edit one file and run it
 again - it says `1 modified, N unchanged (skipped)`. Then `-show` to read back
@@ -133,7 +133,7 @@ the graph it built.
 
 ## Notes
 
-- Each provider defaults to a snappy/cheap model (`claude-sonnet-5`,
+- Each provider defaults to a snappy/cheap model (`claude-sonnet-5-5`,
   `gemini-3.8-flash`); edit `anthropicModel` in `brain_anthropic.go`
   (→ `anthropic.ModelClaudeOpus4_8`) or `geminiModel` in `brain_gemini.go`
   (→ `gemini-2.5-pro`) for max capability. Backends live behind the `brain`

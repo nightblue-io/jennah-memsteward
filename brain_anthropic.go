@@ -11,7 +11,7 @@ import (
 
 // anthropicModel keeps the demo snappy and cheap; swap to
 // anthropic.ModelClaudeOpus4_8 for maximum capability.
-const anthropicModel = anthropic.Model("claude-sonnet-5")
+const anthropicModel = anthropic.Model("claude-sonnet-5-5")
 
 // anthropicBrain is the Claude backend. Unlike a chatbot it keeps no transcript:
 // each file is a fresh, independent forced-tool call.
