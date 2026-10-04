@@ -1,6 +1,6 @@
 // Command memsteward is a demo agent: an AUTONOMOUS codebase STEWARD that keeps a
 // living knowledge graph of a source tree in Jennah, consuming the public memory
-// APIs exactly the way any external agent would — plain HTTP/JSON through the
+// APIs exactly the way any external agent would: plain HTTP/JSON through the
 // jennah-proxy gateway, authenticated with a jennah_sk_ API key. It is a
 // standalone Go module (its own go.mod, not part of the server build) so it
 // models a real outside consumer.
@@ -10,7 +10,7 @@
 //
 //   - The EXECUTION LOG as durable per-file state. Each analyzed file writes a log
 //     step carrying its content hash. On the next run the steward reads the log
-//     back, so it re-analyzes only NEW or CHANGED files and detects REMOVED ones —
+//     back, so it re-analyzes only NEW or CHANGED files and detects REMOVED ones:
 //     incremental work and drift detection, powered purely by remembered state.
 //   - The GRAPH as structural knowledge. Files, the symbols they define, the
 //     dependencies they import, and notable design decisions become nodes and
@@ -26,16 +26,20 @@
 // so re-running converges instead of fragmenting.
 //
 // The analysis brain is pluggable (see brain.go): Claude or Gemini, chosen by which
-// API key is present or an explicit --provider. Only the LLM differs — every memory
+// API key is present or an explicit --provider. Only the LLM differs; every memory
 // call is identical.
 //
 // Setup (Jennah key + one analysis provider). Keys come from env or flags:
 //
 //	export JENNAH_API_KEY=jennah_sk_...      # from POST /v1/apikeys
-//	export ANTHROPIC_API_KEY=sk-ant-...      # Anthropic key, OR
-//	export GEMINI_API_KEY=...                # Google AI Studio key
+//	export ANTHROPIC_API_KEY=sk-ant-...      # Anthropic key
 //	go run . -repo /path/to/repo             # analyze a tree; re-run to see it go incremental
 //	go run . -show                           # print the remembered graph and exit
+//
+// --provider picks a backend explicitly instead: anthropic, bedrock (Claude on
+// Amazon Bedrock, signed with a named AWS profile: --provider bedrock
+// --aws-profile my-profile) or gemini (Vertex AI via GOOGLE_GENAI_USE_VERTEXAI=true,
+// GOOGLE_CLOUD_PROJECT and ADC, or a Google AI Studio GEMINI_API_KEY).
 package main
 
 import (
@@ -78,7 +82,7 @@ const repoNode = "repo"
 // is segment-anchored, so one role selector "demo.*" reaches every id minted here
 // (and nothing else). That keeps a demo run scopable to a throwaway role instead of
 // needing blanket agent access. Only interior '.' is legal in an agent id, so the
-// prefix must be followed by a real name — never used on its own.
+// prefix must be followed by a real name, never used on its own.
 const demoPrefix = "demo."
 
 // dirsToSkip are never walked; they hold vendored, generated, or VCS content.
@@ -90,7 +94,9 @@ func main() {
 	var (
 		endpoint     = flag.String("endpoint", envOr("JENNAH_ENDPOINT", "https://jennah.alphaus.cloud"), "Jennah proxy origin (http/https)")
 		statePath    = flag.String("state", "memsteward-state.json", "path to the local state file (agent id)")
-		provider     = flag.String("provider", "auto", "analysis LLM: auto|gemini|anthropic (auto prefers Anthropic, else Gemini, by which API key is set)")
+		provider     = flag.String("provider", "auto", "analysis LLM: auto|anthropic|bedrock|gemini (auto prefers Anthropic, else Gemini, by which API key is set; bedrock is Claude on Amazon Bedrock and is never picked by auto)")
+		awsRegion    = flag.String("aws-region", "ap-northeast-1", "AWS region for --provider bedrock")
+		awsProfile   = flag.String("aws-profile", "", "AWS named profile for --provider bedrock; empty uses the default credential chain. Prefer this over AWS_PROFILE, which exported AWS_ACCESS_KEY_ID silently overrides")
 		region       = flag.String("region", envOr("JENNAH_REGION", ""), "Jennah home region for the agent (e.g. us-central1); empty uses the platform default. Only applied when creating a new agent workspace. List regions with 'jnh agents regions'")
 		jennahKey    = flag.String("jennah-api-key", "", "Jennah API key (jennah_sk_...); falls back to $JENNAH_API_KEY")
 		anthropicKey = flag.String("anthropic-api-key", "", "Anthropic API key (sk-ant-...); falls back to $ANTHROPIC_API_KEY")
@@ -165,7 +171,7 @@ func main() {
 
 	// The one part that varies by provider: the analysis brain. Everything else is
 	// provider-agnostic; the memory APIs don't care which LLM is thinking.
-	br, err := newBrain(ctx, *provider, *anthropicKey)
+	br, err := newBrain(ctx, *provider, *anthropicKey, awsTarget{region: *awsRegion, profile: *awsProfile})
 	if err != nil {
 		fatal("%v", err)
 	}
@@ -173,7 +179,7 @@ func main() {
 
 	if err := runSteward(ctx, jc, br, st.AgentID, repoAbs, *ext, *maxFiles); err != nil {
 		if errors.Is(err, context.Canceled) {
-			fmt.Println("\ninterrupted — partial progress is saved in Jennah.")
+			fmt.Println("\ninterrupted: partial progress is saved in Jennah.")
 			return
 		}
 		fatal("%v", err)
@@ -190,7 +196,7 @@ func runSteward(ctx context.Context, jc *jennahClient, br brain, agentID, repoAb
 	if truncated {
 		fmt.Printf("note: more than %d matching files; considering the first %d only\n", maxFiles, maxFiles)
 	}
-	fmt.Printf("scanning %s — %d file(s) matching %q\n", repoAbs, len(files), ext)
+	fmt.Printf("scanning %s: %d file(s) matching %q\n", repoAbs, len(files), ext)
 
 	known, err := recallFileState(ctx, jc, agentID)
 	if err != nil {
@@ -239,18 +245,18 @@ func runSteward(ctx context.Context, jc *jennahClient, br brain, agentID, repoAb
 
 	fmt.Printf("\nrun complete: %d new, %d modified, %d unchanged (skipped), %d removed\n", nNew, nMod, nSkip, len(removed))
 	if len(removed) > 0 {
-		fmt.Println("drift — files gone since last run:")
+		fmt.Println("drift: files gone since last run:")
 		for _, rel := range removed {
 			fmt.Printf("  - %s\n", rel)
 		}
 	}
-	fmt.Println("\ndone — run again after editing files to watch it go incremental, or `-show` the graph.")
+	fmt.Println("\ndone: run again after editing files to watch it go incremental, or `-show` the graph.")
 	return nil
 }
 
 // analyzeAndCommit asks the brain to read one file, then writes the analysis to
 // Jennah as a log step (carrying the content hash), a vector chunk, and graph
-// nodes/edges — all in one atomic commit.
+// nodes/edges, all in one atomic commit.
 func analyzeAndCommit(ctx context.Context, jc *jennahClient, br brain, agentID string, f fileEntry, why string) error {
 	content, err := readCapped(f.abs, 8000)
 	if err != nil {
@@ -406,9 +412,9 @@ func showGraph(ctx context.Context, jc *jennahClient, agentID string) error {
 	}
 	sort.Slice(fileRefs, func(i, j int) bool { return fileRefs[i].label < fileRefs[j].label })
 
-	fmt.Printf("\ncodebase graph — %d file(s)\n", len(fileRefs))
+	fmt.Printf("\ncodebase graph: %d file(s)\n", len(fileRefs))
 	if len(fileRefs) == 0 {
-		fmt.Println("(nothing remembered yet — run a scan first)")
+		fmt.Println("(nothing remembered yet; run a scan first)")
 		return nil
 	}
 	for _, fr := range fileRefs {
@@ -574,8 +580,8 @@ func printReceipt(r *agentpb.CommitMemoryResponse, rel string) {
 	// vector covers only the beginning.
 	//
 	// Worth being precise about the blast radius here: memsteward itself never runs
-	// a semantic query — it reads the execution log for per-file state and the graph
-	// for structure — so truncation does NOT degrade anything this tool does. What
+	// a semantic query (it reads the execution log for per-file state and the graph
+	// for structure), so truncation does NOT degrade anything this tool does. What
 	// it degrades is the searchable map memsteward exists to BUILD, for whoever
 	// queries it later (a person, or another agent). That is still worth reporting,
 	// but it is a quality problem in the output rather than a malfunction in the run.
@@ -653,7 +659,7 @@ func gatewayMessage(body []byte) string {
 
 // ---- local state ----
 
-// state persists only the agent id — that's what makes memory carry across runs.
+// state persists only the agent id; that's what makes memory carry across runs.
 // No graph/log id tracking is needed: writes are keyed by deterministic content
 // hashes, so re-running converges.
 type state struct {
@@ -742,7 +748,7 @@ func envOr(key, def string) string {
 }
 
 // envOr2 returns val when it's non-empty (a flag was passed), otherwise the value
-// of env var key. Unlike envOr, the caller-supplied value wins — so an explicit
+// of env var key. Unlike envOr, the caller-supplied value wins, so an explicit
 // flag overrides the env var, and the env var is never a flag default (keeping
 // secrets out of --help).
 func envOr2(val, key string) string {

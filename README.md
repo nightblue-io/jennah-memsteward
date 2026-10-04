@@ -64,13 +64,19 @@ selector `demo.*` reaches every workspace this demo mints - and nothing else.
 1. A Jennah API key for an **approved, entitled** enterprise. Mint one after
    logging in (console or `jnh`):
    `POST /v1/apikeys {"label":"memsteward"}` → copy the `secret` (shown once).
-2. An analysis model - Anthropic, or Gemini (via **Google AI Studio** with an
-   API key, or via **Vertex AI** with a GCP project + ADC).
+2. An analysis model - Anthropic directly, Claude on **Amazon Bedrock** (AWS
+   credentials allowed to call `bedrock:InvokeModel` on the
+   `global.anthropic.claude-sonnet-5-5` inference profile), or Gemini (via
+   **Vertex AI** with a GCP project + ADC, or via **Google AI Studio** with an
+   API key).
 
 The analysis brain is pluggable: only the LLM differs, every Jennah memory call
 is identical. `-provider auto` (the default) picks **Anthropic** when an
 Anthropic key is configured, otherwise **Gemini**; force it with
-`-provider gemini|anthropic`.
+`-provider anthropic|bedrock|gemini`. Bedrock is never picked by `auto`; pass
+its AWS profile with `-aws-profile` rather than `AWS_PROFILE`, which an exported
+`AWS_ACCESS_KEY_ID` silently overrides. On Bedrock the model is the same, served
+through the `global.anthropic.claude-sonnet-5-5` inference profile.
 
 The agent's home region is chosen at creation with `-region` (or
 `$JENNAH_REGION`); it's applied only on first launch, since an agent is pinned
@@ -88,15 +94,18 @@ export JENNAH_API_KEY=jennah_sk_...
 export ANTHROPIC_API_KEY=sk-ant-...
 go run . -repo /path/to/repo                    # auto-selects Anthropic
 
-# …or Gemini via Google AI Studio (API key):
-export GEMINI_API_KEY=...        # or GOOGLE_API_KEY
-go run . -repo /path/to/repo
+# …or Claude on Amazon Bedrock (named AWS profile; -aws-region defaults to ap-northeast-1):
+go run . -provider bedrock -aws-profile my-profile -repo /path/to/repo
 
 # …or Gemini via Vertex AI (GCP project + ADC, no API key):
 gcloud auth application-default login           # once
 export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT=my-gcp-project
 export GOOGLE_CLOUD_LOCATION=us-central1        # optional; defaults to "global"
+go run . -repo /path/to/repo
+
+# …or Gemini via Google AI Studio (API key):
+export GEMINI_API_KEY=...        # or GOOGLE_API_KEY
 go run . -repo /path/to/repo
 
 go run . -provider gemini -repo .   # force a provider regardless of which keys are set
@@ -125,7 +134,9 @@ the graph it built.
 | `-ext` | `.go` | comma-separated extensions to analyze |
 | `-max-files` | `40` | cap on files considered per run (0 = no limit) |
 | `-show` | `false` | print the remembered graph and exit |
-| `-provider` | `auto` | `auto\|gemini\|anthropic` |
+| `-provider` | `auto` | `auto\|anthropic\|bedrock\|gemini` |
+| `-aws-region` | `ap-northeast-1` | AWS region for `-provider bedrock` |
+| `-aws-profile` | | AWS named profile for `-provider bedrock` |
 | `-region` | `$JENNAH_REGION` | home region, applied only at creation |
 | `-endpoint` | `https://jennah.alphaus.cloud` | proxy origin |
 | `-state` | `memsteward-state.json` | local state file (agent id) |
